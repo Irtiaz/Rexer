@@ -35,23 +35,58 @@ void nfa_build_from_regex(NFA *nfa, const char *regex) {
 	hmput(nfa->accepting_states, state1, true);
 }
 
+static NFA_State **unique(NFA_State **list) {
+	struct { NFA_State *key; bool value; } *map = NULL;
+
+	for (int i = 0; i < arrlen(list); ++i) {
+		hmput(map, list[i], true);
+	}
+	arrfree(list);
+
+	NFA_State **result = NULL;
+	for (int i = 0; i < hmlen(map); ++i) {
+		arrput(result, map[i].key);
+	}
+
+	hmfree(map);
+
+	return result;
+}
+
+static void merge_state_list(NFA_State ***p_list, NFA_State **other) {
+	// TODO check why we need to handle the other=NULL case explicitly
+	if (arrlen(other) == 0) return;
+	
+	for (int i = 0; i < arrlen(other); ++i) {
+		arrput(*p_list, other[i]);
+	}
+
+	*p_list = unique(*p_list);
+}
+
+
 static NFA_State **state_next(NFA_State *state, const char *symbol) {
 	NFA_State **nexts = shget(state->transition, symbol);
-	if (arrlen(nexts) != 0) return nexts;
-	return NULL;
+
+	NFA_State **empty_reachables = NULL;
+	for (int i = 0; i < arrlen(nexts); ++i) {
+		NFA_State **epsilons = state_next(nexts[i], NFA_EPSILON);
+		merge_state_list(&empty_reachables, epsilons);
+	}
+	merge_state_list(&nexts, empty_reachables);
+
+	return nexts;
 }
+
 
 static NFA_State **state_list_next(NFA_State **state_list, const char *symbol) {
 	NFA_State **result = NULL;
 
 	for (int i = 0; i < arrlen(state_list); ++i) {
 		NFA_State **nexts = state_next(state_list[i], symbol);
-
-		for (int j = 0; j < arrlen(nexts); ++j) {
-			arrput(result, nexts[j]);
-		}
-
+		merge_state_list(&result, nexts);
 	}
+
 	return result;
 }
 
