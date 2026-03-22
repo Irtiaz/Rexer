@@ -4,13 +4,11 @@
 #include "NFA.h"
 
 int main(void) {
-	NFA_State state0 = {0};
-	NFA_State state1 = {0};
+	NFA nfa = {0};
+	nfa_build_from_regex(&nfa, "a");
 
-	nfa_add_transition(&state0, "a", &state1);
+	printf("Accepts: %d\n", nfa_accepts(&nfa, "a"));
 
-	nfa_free_state(&state0);
-	nfa_free_state(&state1);
-
+	nfa_free(&nfa);
 	return 0;
 }
