@@ -1,10 +1,10 @@
 #include "NFA.h"
 #include "stb_ds.h"
 
-void nfa_add_transition(NFA_State *from, char symbol, NFA_State *to) {
-	NFA_State **to_list = hmget(from->transition, symbol);
+void nfa_add_transition(NFA_State *from, const char *symbol, NFA_State *to) {
+	NFA_State **to_list = shget(from->transition, symbol);
 	arrput(to_list, to);
-	hmput(from->transition, symbol, to_list);
+	shput(from->transition, symbol, to_list);
 }
 
 void nfa_free_state(NFA_State *state) {
