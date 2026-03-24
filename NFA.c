@@ -1,5 +1,12 @@
 #include "NFA.h"
+#include <assert.h>
+#include <stdio.h>
 #include "stb_ds.h"
+
+typedef struct {
+	NFA_State *key;
+	bool value;
+} Traversal_Map;
 
 void nfa_state_init(NFA_State *state) {
   state->transition = NULL;
@@ -12,11 +19,45 @@ void nfa_add_transition(NFA_State *from, const char *symbol, NFA_State *to) {
   shput(from->transition, symbol, to_list);
 }
 
-void nfa_state_free(NFA_State *state) {
+void nfa_state_free(NFA_State *state, Traversal_Map **p_free_map) {
+	for (int i = 0; i < hmlen(state->transition); ++i) {
+		NFA_State **neighbors = state->transition[i].value;
+
+		for (int j = 0; j < arrlen(neighbors); ++j) {
+			NFA_State *neighbor = neighbors[j];
+
+			if (hmget(*p_free_map, neighbor) == false) {
+				nfa_state_free(neighbor, p_free_map);
+			}
+		}
+	}
+
   for (int i = 0; i < hmlen(state->transition); ++i) {
     arrfree(state->transition[i].value);
   }
   hmfree(state->transition);
+
+	hmput(*p_free_map, state, true);
+	free(state);
+}
+
+void nfa_state_print(NFA_State *state, Traversal_Map **p_map) {
+	hmput(*p_map, state, true);
+
+	for (int i = 0; i < hmlen(state->transition); ++i) {
+		const char *symbol = state->transition[i].key;
+		NFA_State **neighbors = state->transition[i].value;
+
+		for (int j = 0; j < arrlen(neighbors); ++j) {
+			NFA_State *neighbor = neighbors[j];
+
+			printf("%p ---- %s ----> %p\n", (void *)state, symbol, (void *)neighbor);
+
+			if (hmget(*p_map, neighbor) == false) {
+				nfa_state_print(neighbor, p_map);
+			}
+		}
+	}
 }
 
 void nfa_build_from_regex(NFA *nfa, const char *regex) {
@@ -27,9 +68,6 @@ void nfa_build_from_regex(NFA *nfa, const char *regex) {
   nfa_state_init(state1);
 
   nfa_add_transition(state0, regex, state1);
-
-  arrput(nfa->states, state0);
-  arrput(nfa->states, state1);
 
   nfa->start_state = state0;
   hmput(nfa->accepting_states, state1, true);
@@ -74,6 +112,7 @@ static NFA_State **state_next(NFA_State *state, const char *symbol) {
     merge_state_list(&empty_reachables, epsilons);
   }
   merge_state_list(&nexts, empty_reachables);
+	arrfree(empty_reachables);
 
   return nexts;
 }
@@ -123,28 +162,50 @@ nfa_accepts_defer:
   return result;
 }
 
-void nfa_free(NFA *nfa) {
-  for (int i = 0; i < arrlen(nfa->states); ++i) {
-    nfa_state_free(nfa->states[i]);
-    free(nfa->states[i]);
-  }
-  arrfree(nfa->states);
+void nfa_free(NFA *nfa, bool owned) {
+	if (owned) {
+		Traversal_Map *map = NULL;
+		nfa_state_free(nfa->start_state, &map);
+		hmfree(map);
+	}
 
   hmfree(nfa->accepting_states);
 }
 
-/* void nfa_concat(NFA *nfa1, NFA *nfa2) { */
-/* 	NFA_State **to_be_removed = NULL; */
+void nfa_print(NFA *nfa) {
+	Traversal_Map *map = NULL;
 
-/* 	for (int i = 0; i < hmlen(nfa1->accepting_states); ++i) { */
-/* 		NFA_State *accepting_state = nfa1->accepting_states[i].key; */
-/* 		nfa_add_transition(accepting_state, NFA_EPSILON,
- * nfa2->start_state); */
+	printf("Start state: %p\n", (void *)nfa->start_state);
+	puts("Accepting state(s):");
+	for (int i = 0; i < hmlen(nfa->accepting_states); ++i) {
+		printf("%p\n", (void *)nfa->accepting_states[i].key);
+	}
 
-/* 		arrput(to_be_removed, accepting_state); */
-/* 	} */
+	puts("--------------------");
+	
+	nfa_state_print(nfa->start_state, &map);
+	hmfree(map);
+}
 
-/* 	for (int i = 0; i < arrlen(to_be_removed); ++i) { */
-/* 		hmdel(nfa1->accepting_states, to_be_removed[i]); */
-/* 	} */
-/* } */
+void nfa_concat(NFA *nfa1, NFA *nfa2) {
+	NFA_State **to_be_removed = NULL;
+
+	for (int i = 0; i < hmlen(nfa1->accepting_states); ++i) {
+		NFA_State *accepting_state = nfa1->accepting_states[i].key;
+		nfa_add_transition(accepting_state, NFA_EPSILON,
+nfa2->start_state);
+
+		arrput(to_be_removed, accepting_state);
+	}
+
+	for (int i = 0; i < arrlen(to_be_removed); ++i) {
+		bool removed = hmdel(nfa1->accepting_states, to_be_removed[i]);
+		assert(removed == true);
+	}
+	arrfree(to_be_removed);
+
+	for (int i = 0; i < hmlen(nfa2->accepting_states); ++i) {
+		NFA_State *accepting_state = nfa2->accepting_states[i].key;
+		hmput(nfa1->accepting_states, accepting_state, true);
+	}
+}
