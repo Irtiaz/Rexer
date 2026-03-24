@@ -8,18 +8,21 @@ typedef struct {
 	bool value;
 } Traversal_Map;
 
-void nfa_state_init(NFA_State *state) {
+static NFA_State *nfa_state_init(void) {
+	NFA_State *state = malloc(sizeof(NFA_State));
   state->transition = NULL;
   sh_new_arena(state->transition);
+
+	return state;
 }
 
-void nfa_add_transition(NFA_State *from, const char *symbol, NFA_State *to) {
+static void nfa_add_transition(NFA_State *from, const char *symbol, NFA_State *to) {
   NFA_State **to_list = shget(from->transition, symbol);
   arrput(to_list, to);
   shput(from->transition, symbol, to_list);
 }
 
-void nfa_state_free(NFA_State *state, Traversal_Map **p_free_map) {
+static void nfa_state_free(NFA_State *state, Traversal_Map **p_free_map) {
 	for (int i = 0; i < hmlen(state->transition); ++i) {
 		NFA_State **neighbors = state->transition[i].value;
 
@@ -41,7 +44,7 @@ void nfa_state_free(NFA_State *state, Traversal_Map **p_free_map) {
 	free(state);
 }
 
-void nfa_state_print(NFA_State *state, Traversal_Map **p_map) {
+static void nfa_state_print(NFA_State *state, Traversal_Map **p_map) {
 	hmput(*p_map, state, true);
 
 	for (int i = 0; i < hmlen(state->transition); ++i) {
@@ -61,11 +64,8 @@ void nfa_state_print(NFA_State *state, Traversal_Map **p_map) {
 }
 
 void nfa_build_from_regex(NFA *nfa, const char *regex) {
-  NFA_State *state0 = malloc(sizeof(NFA_State));
-  nfa_state_init(state0);
-
-  NFA_State *state1 = malloc(sizeof(NFA_State));
-  nfa_state_init(state1);
+  NFA_State *state0 = nfa_state_init();
+  NFA_State *state1 = nfa_state_init();
 
   nfa_add_transition(state0, regex, state1);
 
@@ -132,6 +132,9 @@ bool nfa_accepts(NFA *nfa, const char *string) {
   NFA_State **current_states = NULL;
   arrput(current_states, nfa->start_state);
 
+	NFA_State **other_start_states = state_next(nfa->start_state, NFA_EPSILON);
+	merge_state_list(&current_states, other_start_states);
+
   while (*string != '\0' && arrlen(current_states) != 0) {
     char symbol[2] = {0};
     symbol[0] = *string;
@@ -175,6 +178,8 @@ void nfa_free(NFA *nfa, bool owned) {
 void nfa_print(NFA *nfa) {
 	Traversal_Map *map = NULL;
 
+	puts("--------------------");
+
 	printf("Start state: %p\n", (void *)nfa->start_state);
 	puts("Accepting state(s):");
 	for (int i = 0; i < hmlen(nfa->accepting_states); ++i) {
@@ -182,9 +187,17 @@ void nfa_print(NFA *nfa) {
 	}
 
 	puts("--------------------");
-	
 	nfa_state_print(nfa->start_state, &map);
+	puts("--------------------");
+
 	hmfree(map);
+}
+
+static void copy_accepting_states(NFA *nfa1, NFA *nfa2) {
+	for (int i = 0; i < hmlen(nfa2->accepting_states); ++i) {
+		NFA_State *accepting_state = nfa2->accepting_states[i].key;
+		hmput(nfa1->accepting_states, accepting_state, true);
+	}
 }
 
 void nfa_concat(NFA *nfa1, NFA *nfa2) {
@@ -204,8 +217,16 @@ nfa2->start_state);
 	}
 	arrfree(to_be_removed);
 
-	for (int i = 0; i < hmlen(nfa2->accepting_states); ++i) {
-		NFA_State *accepting_state = nfa2->accepting_states[i].key;
-		hmput(nfa1->accepting_states, accepting_state, true);
-	}
+	copy_accepting_states(nfa1, nfa2);
+}
+
+void nfa_union(NFA *nfa1, NFA *nfa2) {
+	NFA_State *start_state = nfa_state_init();
+
+	nfa_add_transition(start_state, NFA_EPSILON, nfa1->start_state);
+	nfa_add_transition(start_state, NFA_EPSILON, nfa2->start_state);
+
+	nfa1->start_state = start_state;
+
+	copy_accepting_states(nfa1, nfa2);
 }

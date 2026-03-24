@@ -24,6 +24,7 @@ void nfa_free(NFA *nfa, bool owned);
 
 void nfa_print(NFA *nfa);
 
-void nfa_concat(NFA *nfa1, NFA *nfa2); // Modifies the nfa1
+void nfa_concat(NFA *nfa1, NFA *nfa2); // Modifies nfa1
+void nfa_union(NFA *nfa1, NFA *nfa2); // Modifies nfa1
 
 #endif
