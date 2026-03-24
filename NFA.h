@@ -26,4 +26,6 @@ void nfa_build_from_regex(NFA *nfa, const char *regex);
 bool nfa_accepts(NFA *nfa, const char *string);
 void nfa_free(NFA *nfa);
 
+void nfa_concat(NFA *nfa1, NFA *nfa2); // Modifies the nfa1
+
 #endif
