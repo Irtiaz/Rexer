@@ -8,6 +8,11 @@ typedef struct {
 	bool value;
 } Traversal_Map;
 
+typedef struct {
+	NFA_State *key;
+	NFA_State *value;
+} State_Map;
+
 static NFA_State *nfa_state_init(void) {
 	NFA_State *state = malloc(sizeof(NFA_State));
   state->transition = NULL;
@@ -45,6 +50,36 @@ static void nfa_state_free(NFA_State *state, Traversal_Map **p_free_map) {
 	free(state);
 }
 
+// Collect all states into a list starting from `state`
+static void nfa_collect_all_states(NFA_State *state, Traversal_Map **p_map, NFA_State ***p_list) {
+	hmput(*p_map, state, true);
+	arrput(*p_list, state);
+
+	for (int i = 0; i < hmlen(state->transition); ++i) {
+		NFA_State **neighbors = state->transition[i].value;
+
+		for (int j = 0; j < arrlen(neighbors); ++j) {
+			NFA_State *neighbor = neighbors[j];
+
+			if (hmget(*p_map, neighbor) == false) {
+				nfa_collect_all_states(neighbor, p_map, p_list);
+			}
+		}
+	}
+}
+
+// Take a `list` of states and duplicate all of them and
+// return a mapping from the old state to the new one
+static State_Map *nfa_state_duplicates(NFA_State **list) {
+	State_Map *map = NULL;
+	for (int i = 0; i < arrlen(list); ++i) {
+		NFA_State *duplicate = nfa_state_init();
+		hmput(map, list[i], duplicate);
+	}
+
+	return map;
+}
+
 static void nfa_state_print(NFA_State *state, Traversal_Map **p_map) {
 	hmput(*p_map, state, true);
 
@@ -55,7 +90,8 @@ static void nfa_state_print(NFA_State *state, Traversal_Map **p_map) {
 		for (int j = 0; j < arrlen(neighbors); ++j) {
 			NFA_State *neighbor = neighbors[j];
 
-			printf("%p ---- %s ----> %p\n", (void *)state, symbol, (void *)neighbor);
+			/* printf("%p ---- %s ----> %p\n", (void *)state, symbol, (void *)neighbor); */
+			printf("\t\"%p\" -> \"%p\" [label=\"%s\"]\n", (void *)state, (void *)neighbor, symbol);
 
 			if (hmget(*p_map, neighbor) == false) {
 				nfa_state_print(neighbor, p_map);
@@ -64,17 +100,22 @@ static void nfa_state_print(NFA_State *state, Traversal_Map **p_map) {
 	}
 }
 
-NFA *nfa_build_from_symbol(const char *regex) {
+NFA *nfa_build_from_symbol(const char *symbol) {
 	NFA *nfa = calloc(1, sizeof(NFA));
   NFA_State *state0 = nfa_state_init();
   NFA_State *state1 = nfa_state_init();
 
-  nfa_add_transition(state0, regex, state1);
+  nfa_add_transition(state0, symbol, state1);
 
   nfa->start_state = state0;
   hmput(nfa->accepting_states, state1, true);
 
 	return nfa;
+}
+
+NFA *nfa_build_from_regex(const char *regex) {
+	// TODO fix it later
+	return nfa_build_from_symbol(regex);
 }
 
 static void remove_duplicates(NFA_State ***p_list) {
@@ -194,20 +235,55 @@ void nfa_free(NFA *nfa, bool owned) {
 	free(nfa);
 }
 
+NFA *nfa_deep_copy(NFA *nfa) {
+	NFA_State **states = NULL;
+
+	Traversal_Map *traversal_map = NULL;
+	nfa_collect_all_states(nfa->start_state, &traversal_map, &states);
+	hmfree(traversal_map);
+
+	State_Map *state_map = nfa_state_duplicates(states);
+
+	for (int i = 0; i < arrlen(states); ++i) {
+		NFA_State *old_state = states[i];
+		NFA_State *new_state = hmget(state_map, old_state);
+
+		for (int j = 0; j < hmlen(old_state->transition); ++j) {
+			const char *symbol = old_state->transition[j].key;
+			NFA_State **neighbors = old_state->transition[j].value;
+
+			for (int k = 0; k < arrlen(neighbors); ++k) {
+				NFA_State *old_neighbor = neighbors[k];
+				NFA_State *new_neighbor = hmget(state_map, old_neighbor);
+
+				nfa_add_transition(new_state, symbol, new_neighbor);
+			}
+		}
+	}
+	arrfree(states);
+
+	NFA *duplicate = calloc(1, sizeof(NFA));
+	duplicate->start_state = hmget(state_map, nfa->start_state);
+
+	hmfree(state_map);
+	
+	return duplicate;
+}
+
 void nfa_print(NFA *nfa) {
 	Traversal_Map *map = NULL;
 
-	puts("--------------------");
+	puts("\n--------------------");
+	puts("Digraph G {");
 
-	printf("Start state: %p\n", (void *)nfa->start_state);
-	puts("Accepting state(s):");
+	printf("\"%p\" [style=filled, fillcolor=lightblue]\n", (void *)nfa->start_state);
 	for (int i = 0; i < hmlen(nfa->accepting_states); ++i) {
-		printf("%p\n", (void *)nfa->accepting_states[i].key);
+		printf("\"%p\" [style=filled, fillcolor=lightgreen]\n", (void *)nfa->accepting_states[i].key);
 	}
 
-	puts("--------------------");
 	nfa_state_print(nfa->start_state, &map);
-	puts("--------------------");
+	puts("}");
+	puts("--------------------\n");
 
 	hmfree(map);
 }
@@ -271,11 +347,20 @@ void nfa_kleene_star(NFA *nfa) {
 		arrput(to_be_removed, accepting_state);
 	}
 
-	for (int i = 0; i < hmlen(nfa->accepting_states); ++i) {
+	for (int i = 0; i < arrlen(to_be_removed); ++i) {
 		(void)hmdel(nfa->accepting_states, to_be_removed[i]);
 	}
 	arrfree(to_be_removed);
 
 	nfa->start_state = new_start_state;
 	hmput(nfa->accepting_states, new_accepting_state, true);
+}
+
+void nfa_kleene_plus(NFA *nfa) {
+	NFA *duplicate = nfa_deep_copy(nfa);
+
+	nfa_kleene_star(duplicate);
+	nfa_concat(nfa, duplicate);
+
+	nfa_free(duplicate, false);
 }

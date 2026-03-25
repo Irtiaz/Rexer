@@ -4,9 +4,9 @@
 #include "NFA.h"
 
 int main(void) {
-	NFA *nfa1 = nfa_build_from_symbol("a");
-	NFA *nfa2 = nfa_build_from_symbol("b");
-	NFA *nfa3 = nfa_build_from_symbol("c");
+	NFA *nfa1 = nfa_build_from_regex("a");
+	NFA *nfa2 = nfa_build_from_regex("b");
+	NFA *nfa3 = nfa_build_from_regex("c");
 
 	nfa_concat(nfa1, nfa2);
 	nfa_union(nfa1, nfa3);
@@ -15,9 +15,12 @@ int main(void) {
 	nfa_print(nfa1);
 
 	char testcases[][100] = {
+		"",
 		"a",
+		"aaaa",
 		"b",
 		"c",
+		"ccc",
 		"ab",
 		"ac",
 		"bc",
