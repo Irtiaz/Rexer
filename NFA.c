@@ -63,7 +63,8 @@ static void nfa_state_print(NFA_State *state, Traversal_Map **p_map) {
 	}
 }
 
-void nfa_build_from_regex(NFA *nfa, const char *regex) {
+NFA *nfa_build_from_symbol(const char *regex) {
+	NFA *nfa = calloc(1, sizeof(NFA));
   NFA_State *state0 = nfa_state_init();
   NFA_State *state1 = nfa_state_init();
 
@@ -71,6 +72,8 @@ void nfa_build_from_regex(NFA *nfa, const char *regex) {
 
   nfa->start_state = state0;
   hmput(nfa->accepting_states, state1, true);
+
+	return nfa;
 }
 
 static void remove_duplicates(NFA_State ***p_list) {
@@ -173,6 +176,8 @@ void nfa_free(NFA *nfa, bool owned) {
 	}
 
   hmfree(nfa->accepting_states);
+
+	free(nfa);
 }
 
 void nfa_print(NFA *nfa) {

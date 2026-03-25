@@ -18,7 +18,7 @@ typedef struct {
 } NFA;
 
 
-void nfa_build_from_regex(NFA *nfa, const char *regex);
+NFA *nfa_build_from_symbol(const char *regex);
 bool nfa_accepts(NFA *nfa, const char *string);
 void nfa_free(NFA *nfa, bool owned);
 
