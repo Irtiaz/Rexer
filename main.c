@@ -10,17 +10,20 @@ int main(void) {
 
 	nfa_concat(nfa1, nfa2);
 	nfa_union(nfa1, nfa3);
+	nfa_kleene_star(nfa1);
 
 	nfa_print(nfa1);
 
-	char testcases[][10] = {
+	char testcases[][100] = {
 		"a",
 		"b",
 		"c",
 		"ab",
 		"ac",
 		"bc",
-		"abc"
+		"abc",
+		"ababab",
+		"ababccccab"
 	};
 
 	size_t num_testcases = sizeof(testcases) / sizeof(testcases[0]);

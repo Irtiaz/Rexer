@@ -23,6 +23,8 @@ static void nfa_add_transition(NFA_State *from, const char *symbol, NFA_State *t
 }
 
 static void nfa_state_free(NFA_State *state, Traversal_Map **p_free_map) {
+	hmput(*p_free_map, state, true);
+
 	for (int i = 0; i < hmlen(state->transition); ++i) {
 		NFA_State **neighbors = state->transition[i].value;
 
@@ -40,7 +42,6 @@ static void nfa_state_free(NFA_State *state, Traversal_Map **p_free_map) {
   }
   hmfree(state->transition);
 
-	hmput(*p_free_map, state, true);
 	free(state);
 }
 
@@ -106,16 +107,29 @@ static void merge_state_list(NFA_State ***p_list, NFA_State **other) {
   remove_duplicates(p_list);
 }
 
+static void merge_temp_list(NFA_State ***p_list, NFA_State **temp) {
+	merge_state_list(p_list, temp);
+	arrfree(temp);
+}
+
+
+static NFA_State **duplicate_list(NFA_State **list) {
+	NFA_State **result = NULL;
+	for (int i = 0; i < arrlen(list); ++i) {
+		arrput(result, list[i]);
+	}
+	return result;
+}
+
 static NFA_State **state_next(NFA_State *state, const char *symbol) {
-  NFA_State **nexts = shget(state->transition, symbol);
+  NFA_State **nexts = duplicate_list(shget(state->transition, symbol));
 
   NFA_State **empty_reachables = NULL;
   for (int i = 0; i < arrlen(nexts); ++i) {
     NFA_State **epsilons = state_next(nexts[i], NFA_EPSILON);
-    merge_state_list(&empty_reachables, epsilons);
+    merge_temp_list(&empty_reachables, epsilons);
   }
-  merge_state_list(&nexts, empty_reachables);
-	arrfree(empty_reachables);
+  merge_temp_list(&nexts, empty_reachables);
 
   return nexts;
 }
@@ -125,7 +139,7 @@ static NFA_State **state_list_next(NFA_State **state_list, const char *symbol) {
 
   for (int i = 0; i < arrlen(state_list); ++i) {
     NFA_State **nexts = state_next(state_list[i], symbol);
-    merge_state_list(&result, nexts);
+    merge_temp_list(&result, nexts);
   }
 
   return result;
@@ -136,7 +150,7 @@ bool nfa_accepts(NFA *nfa, const char *string) {
   arrput(current_states, nfa->start_state);
 
 	NFA_State **other_start_states = state_next(nfa->start_state, NFA_EPSILON);
-	merge_state_list(&current_states, other_start_states);
+	merge_temp_list(&current_states, other_start_states);
 
   while (*string != '\0' && arrlen(current_states) != 0) {
     char symbol[2] = {0};
@@ -234,4 +248,34 @@ void nfa_union(NFA *nfa1, NFA *nfa2) {
 	nfa1->start_state = start_state;
 
 	copy_accepting_states(nfa1, nfa2);
+}
+
+void nfa_kleene_star(NFA *nfa) {
+	// Following the Thompson Construction for kleene star
+	// https://en.wikipedia.org/wiki/Thompson%27s_construction
+
+	NFA_State *new_start_state = nfa_state_init();
+	NFA_State *new_accepting_state = nfa_state_init();
+
+	nfa_add_transition(new_start_state, NFA_EPSILON, nfa->start_state);
+	nfa_add_transition(new_start_state, NFA_EPSILON, new_accepting_state);
+
+	NFA_State **to_be_removed = NULL;
+
+	for (int i = 0; i < hmlen(nfa->accepting_states); ++i) {
+		NFA_State *accepting_state = nfa->accepting_states[i].key;
+
+		nfa_add_transition(accepting_state, NFA_EPSILON, nfa->start_state);
+		nfa_add_transition(accepting_state, NFA_EPSILON, new_accepting_state);
+		
+		arrput(to_be_removed, accepting_state);
+	}
+
+	for (int i = 0; i < hmlen(nfa->accepting_states); ++i) {
+		(void)hmdel(nfa->accepting_states, to_be_removed[i]);
+	}
+	arrfree(to_be_removed);
+
+	nfa->start_state = new_start_state;
+	hmput(nfa->accepting_states, new_accepting_state, true);
 }
