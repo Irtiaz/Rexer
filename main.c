@@ -4,7 +4,7 @@
 #include "NFA.h"
 
 int main(void) {
-	NFA *nfa = nfa_from_regex("(ab|c)+");
+	NFA *nfa = nfa_from_regex("a**");
 	nfa_print(nfa);
 
 	char testcases[][100] = {

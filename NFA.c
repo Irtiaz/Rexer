@@ -323,45 +323,44 @@ static NFA *parse_unary_expression(const char *regex, Regex_Token *tokens,
 
 // Parses from the `tokens` array from start (inclusive) to end (exclusive)
 static NFA *parse_concat_expression(const char *regex, Regex_Token *tokens,
-                                    size_t start, size_t end) {
-  NFA *nfa = NULL;
+																		size_t start, size_t end) {
+	NFA *nfa = NULL;
 
-	size_t i = start;
-	while (i < end) {
-		Regex_Token token = tokens[i];
-		NFA *next;
+  size_t i = start;
+  while (i < end) {
+    Regex_Token token = tokens[i];
+    NFA *next;
 
-		size_t next_i = i + 1;
+    size_t next_i = i + 1;
 
-		if (token.kind == TOK_LPAREN) {
-			size_t pair = token.pair_index;
-			next = parse_union_expression(regex, tokens, i + 1, pair);
-			next_i = pair + 1;
-		}
+    if (token.kind == TOK_LPAREN) {
+      size_t pair = token.pair_index;
+      next = parse_union_expression(regex, tokens, i + 1, pair);
+      next_i = pair + 1;
+    }
 
-		else {
-			next = parse_unary_expression(regex, tokens, i);
-		}
+    else {
+      next = parse_unary_expression(regex, tokens, i);
+    }
 
-		if (next_i < end) {
-			Regex_Token next_token = tokens[next_i];
-			Token_Kind next_kind = next_token.kind;
+    while (next_i < end && (tokens[next_i].kind == TOK_STAR ||
+														tokens[next_i].kind == TOK_PLUS)) {
+      if (tokens[next_i].kind == TOK_STAR)
+        nfa_kleene_star(next);
+      else
+        nfa_kleene_plus(next);
+      ++next_i;
+    }
 
-			if (next_kind == TOK_STAR || next_kind == TOK_PLUS) {
-				if (next_token.kind == TOK_STAR) nfa_kleene_star(next);
-				else nfa_kleene_plus(next);
-				++next_i;
-			}
-		}
+    if (nfa == NULL)
+      nfa = next;
+    else {
+      nfa_concat(nfa, next);
+      nfa_free(next, false);
+    }
 
-		if (nfa == NULL) nfa = next;
-		else {
-			nfa_concat(nfa, next);
-			nfa_free(next, false);
-		}
-
-		i = next_i;
-	}
+    i = next_i;
+  }
 
   return nfa;
 }
@@ -464,7 +463,9 @@ static NFA_State **duplicate_list(NFA_State **list) {
   return result;
 }
 
-static NFA_State **state_next(NFA_State *state, const char *symbol) {
+static NFA_State **state_next_recursive(NFA_State *state, const char *symbol, Traversal_Map **p_map) {
+	hmput(*p_map, state, true);
+
   NFA_State **nexts = duplicate_list(shget(state->transition, symbol));
   if (strcmp(symbol, NFA_EPSILON)) {
     merge_temp_list(&nexts, duplicate_list(shget(state->transition, NFA_ANY)));
@@ -472,12 +473,22 @@ static NFA_State **state_next(NFA_State *state, const char *symbol) {
 
   NFA_State **empty_reachables = NULL;
   for (int i = 0; i < arrlen(nexts); ++i) {
-    NFA_State **epsilons = state_next(nexts[i], NFA_EPSILON);
-    merge_temp_list(&empty_reachables, epsilons);
+		if (hmget(*p_map, nexts[i]) == false) {
+				NFA_State **epsilons = state_next_recursive(nexts[i], NFA_EPSILON, p_map);
+				merge_temp_list(&empty_reachables, epsilons);
+		}
   }
   merge_temp_list(&nexts, empty_reachables);
 
   return nexts;
+}
+
+static NFA_State **state_next(NFA_State *state, const char *symbol) {
+	Traversal_Map *map = NULL;
+	NFA_State **nexts = state_next_recursive(state, symbol, &map);
+	hmfree(map);
+
+	return nexts;
 }
 
 static NFA_State **state_list_next(NFA_State **state_list, const char *symbol) {
