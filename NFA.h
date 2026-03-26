@@ -32,4 +32,7 @@ void nfa_union(NFA *nfa1, NFA *nfa2); // Modifies nfa1
 void nfa_kleene_star(NFA *nfa); // Modifies nfa
 void nfa_kleene_plus(NFA *nfa); // Modifies nfa
 
+// TODO remove later
+void print_tokens(const char *regex);
+
 #endif

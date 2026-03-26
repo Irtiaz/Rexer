@@ -4,6 +4,11 @@
 #include "NFA.h"
 
 int main(void) {
+	char regex[] = "((ab)|c)+d*";
+	print_tokens(regex);
+}
+
+int main3(void) {
 	NFA *nfa = nfa_build_from_regex("a|b|a.c");
 
 	nfa_print(nfa);

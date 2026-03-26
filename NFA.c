@@ -3,6 +3,16 @@
 #include <stdio.h>
 #include "stb_ds.h"
 
+typedef enum {
+	TOK_STAR,
+	TOK_PLUS,
+	TOK_LPAREN,
+	TOK_RPAREN,
+	TOK_ANY,
+	TOK_UNION,
+	TOK_CHAR
+} Token_Kind;
+
 typedef struct {
 	NFA_State *key;
 	bool value;
@@ -12,6 +22,14 @@ typedef struct {
 	NFA_State *key;
 	NFA_State *value;
 } State_Map;
+
+typedef struct {
+	Token_Kind kind;
+	char value; // Only valid for TOK_CHAR
+	size_t pair_index; // Only valid for paired tokens like LPAREN-RPAREN
+
+	size_t location;
+} Regex_Token;
 
 static NFA_State *nfa_state_init(void) {
 	NFA_State *state = malloc(sizeof(NFA_State));
@@ -112,6 +130,180 @@ NFA *nfa_build_from_symbol(const char *symbol) {
   hmput(nfa->accepting_states, state1, true);
 
 	return nfa;
+}
+
+static void match_parens(const char *regex, Regex_Token *tokens) {
+	bool error = false;
+
+	int global_counter = 0;
+	for (int i = 0; i < arrlen(tokens); ++i) {
+		if (tokens[i].kind != TOK_LPAREN && tokens[i].kind != TOK_RPAREN) {
+			continue;
+		}
+
+		if (tokens[i].kind == TOK_LPAREN) ++global_counter;
+		else --global_counter;
+
+		if (global_counter < 0) {
+			fprintf(stderr, "Stray ')' found\n%s\n", regex);
+			fprintf(stderr, "%*s^~~~~~~\n", (int)tokens[i].location, " ");
+			error = true;
+		}
+
+		if (tokens[i].kind != TOK_LPAREN) continue;
+
+		bool pair_found = false;
+		int counter = 1;
+
+		for (int j = i + 1; j < arrlen(tokens); ++j) {
+			if (tokens[j].kind != TOK_LPAREN && tokens[j].kind != TOK_RPAREN) {
+				continue;
+			}
+
+			if (tokens[j].kind == TOK_LPAREN) ++counter;
+			else --counter;
+
+			if (counter == 0) {
+				tokens[i].pair_index = j;
+				tokens[j].pair_index = i;
+
+				pair_found = true;
+				break;
+			}
+		}
+
+		if (!pair_found) {
+			fprintf(stderr, "Stray '(' found\n%s\n", regex);
+			fprintf(stderr, "%*s^~~~~~~\n", (int)tokens[i].location, " ");
+			error = true;
+		}
+	}
+
+	if (error) exit(1);
+}
+
+static Regex_Token *tokenize(const char *regex) {
+	Regex_Token *tokens = NULL;
+
+	size_t i = 0;
+
+	while (regex[i] != '\0') {
+		char c = regex[i];
+
+		if (c == '(') {
+			arrput(tokens, ((Regex_Token){
+				.kind = TOK_LPAREN,
+				.location = i
+			}));
+		}
+
+		else if (c == ')') {
+			arrput(tokens, ((Regex_Token){
+				.kind = TOK_RPAREN,
+				.location = i
+			}));
+		}
+
+		else if (c == '+') {
+			arrput(tokens, ((Regex_Token){
+				.kind = TOK_PLUS,
+				.location = i
+			}));
+		}
+
+		else if (c == '*') {
+			arrput(tokens, ((Regex_Token){
+				.kind = TOK_STAR,
+				.location = i
+			}));
+		}
+
+		else if (c == '.') {
+			arrput(tokens, ((Regex_Token){
+				.kind = TOK_ANY,
+				.location = i
+			}));
+		}
+
+		else if (c == '|') {
+			arrput(tokens, ((Regex_Token){
+				.kind = TOK_UNION,
+				.location = i
+			}));
+		}
+
+		else if (c != '\\') {
+			arrput(tokens, ((Regex_Token){
+				.kind = TOK_CHAR,
+				.location = i,
+				.value = c
+			}));
+		}
+
+		else {
+			if (regex[i + 1] == '\0') {
+				fprintf(stderr, "Unfinished escape character encountered\n%s\n", regex);
+				fprintf(stderr, "%*s^~~~~~~\n", (int)i, " ");
+				exit(1);
+			}
+
+			else {
+				arrput(tokens, ((Regex_Token){
+						.kind = TOK_CHAR,
+						.location = i + 1,
+						.value = regex[i + 1]
+				}));
+			}
+
+			++i;
+		}
+
+		++i;
+	}
+
+	match_parens(regex, tokens);
+	
+	return tokens;
+}
+
+void print_tokens(const char *regex) {
+	Regex_Token *tokens = tokenize(regex);
+
+	for (int i = 0; i < arrlen(tokens); ++i) {
+		Regex_Token token = tokens[i];
+		switch (token.kind) {
+				case TOK_STAR: {
+					puts("TOK_STAR");
+				} break;
+
+				case TOK_PLUS: {
+					puts("TOK_PLUS");
+				} break;
+
+				case TOK_LPAREN: {
+					printf("TOK_LPAREN, pair: %lu\n", token.pair_index);
+				} break;
+
+				case TOK_RPAREN: {
+					printf("TOK_RPAREN, pair: %lu\n", token.pair_index);
+				} break;
+
+				case TOK_ANY: {
+					puts("TOK_ANY");
+				} break;
+
+				case TOK_UNION: {
+					puts("TOK_UNION");
+				} break;
+
+				case TOK_CHAR: {
+					printf("TOK_CHAR: %c\n", token.value);
+				} break;
+
+		}
+	}
+	
+	arrfree(tokens);
 }
 
 // Returns the next symbol character
