@@ -114,9 +114,103 @@ NFA *nfa_build_from_symbol(const char *symbol) {
 	return nfa;
 }
 
+// Returns the next symbol character
+// '\\' in case of any escape character
+// Also sets `len` based on how much regex-characters were consumed
+// Does NOT change regex
+static char next_symbol_char(const char *regex, size_t *len) {
+	if (*regex != '\\') {
+		*len = 1;
+		return *regex;
+	}
+
+	else {
+		*len = 2;
+		return '\\'; // A skip character, not important exactly what
+	}
+}
+
+// Writes appropriate symbol string into symbol
+// `size` is the size of the buffer for symbol (caller will set)
+// Changes the regex parameter (basically chops away the next symbol)
+static void chop_next_symbol(char *symbol, size_t size, const char **regex) {
+	memset(symbol, 0, size);
+
+	if (**regex != '\\') {
+		if (**regex != '.') {
+				symbol[0] = **regex;
+		}
+		else {
+			strcpy(symbol, NFA_ANY);
+		}
+
+		(*regex)++;
+	}
+
+	else {
+		symbol[0] = *(*regex + 1);
+		(*regex) += 2;
+	}
+}
+
+static NFA *nfa_build_concat_regex(const char *regex, size_t length) {
+	char symbol[20] = {0};
+	chop_next_symbol(symbol, sizeof(symbol), &regex);
+
+	NFA *nfa = nfa_build_from_symbol(symbol);
+
+	for (size_t i = 1; i < length && *regex; ++i) {
+		chop_next_symbol(symbol, sizeof(symbol), &regex);
+		NFA *nfa_next = nfa_build_from_symbol(symbol);
+		nfa_concat(nfa, nfa_next);
+		nfa_free(nfa_next, false);
+	}
+
+	return nfa;
+}
+
+static NFA *nfa_build_union_regex(const char *regex, size_t length) {
+	NFA *nfa = NULL;
+	size_t start = 0;
+
+	size_t i = 0;
+	while (i < length) {
+		size_t next_len;
+		char next = next_symbol_char(regex + i, &next_len);
+
+		if (next == '|' || i == length - 1) {
+			if (i == length - 1) {
+				++i;
+			}
+			if (i == start) {
+				fprintf(stderr, "Missing left operand for |\n");
+				exit(1);
+			}
+
+			if (nfa == NULL) {
+				nfa = nfa_build_concat_regex(regex + start, i - start);
+			}
+			else {
+				NFA *nfa_next = nfa_build_concat_regex(regex + start, i - start);
+				nfa_union(nfa, nfa_next);
+				nfa_free(nfa_next, false);
+			}
+
+			start = i + 1;
+		}
+
+		i += next_len;
+	}
+
+	if (nfa == NULL) {
+		nfa = nfa_build_concat_regex(regex, length);
+	}
+
+	return nfa;
+}
+
 NFA *nfa_build_from_regex(const char *regex) {
-	// TODO fix it later
-	return nfa_build_from_symbol(regex);
+	return nfa_build_union_regex(regex, strlen(regex));
 }
 
 static void remove_duplicates(NFA_State ***p_list) {
