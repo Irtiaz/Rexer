@@ -5,6 +5,7 @@
 #include "stb_ds.h"
 
 #define NFA_EPSILON "epsilon"
+#define NFA_ANY "any"
 
 typedef struct NFA_State_Struct NFA_State;
 

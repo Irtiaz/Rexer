@@ -80,6 +80,8 @@ static State_Map *nfa_state_duplicates(NFA_State **list) {
 	return map;
 }
 
+// Prints a dot format Graphviz output
+// That can be directly viewed with https://dreampuf.github.io/GraphvizOnline/?engine=dot
 static void nfa_state_print(NFA_State *state, Traversal_Map **p_map) {
 	hmput(*p_map, state, true);
 
@@ -90,7 +92,6 @@ static void nfa_state_print(NFA_State *state, Traversal_Map **p_map) {
 		for (int j = 0; j < arrlen(neighbors); ++j) {
 			NFA_State *neighbor = neighbors[j];
 
-			/* printf("%p ---- %s ----> %p\n", (void *)state, symbol, (void *)neighbor); */
 			printf("\t\"%p\" -> \"%p\" [label=\"%s\"]\n", (void *)state, (void *)neighbor, symbol);
 
 			if (hmget(*p_map, neighbor) == false) {
@@ -164,6 +165,9 @@ static NFA_State **duplicate_list(NFA_State **list) {
 
 static NFA_State **state_next(NFA_State *state, const char *symbol) {
   NFA_State **nexts = duplicate_list(shget(state->transition, symbol));
+	if (strcmp(symbol, NFA_EPSILON)) {
+		merge_temp_list(&nexts, duplicate_list(shget(state->transition, NFA_ANY)));
+	}
 
   NFA_State **empty_reachables = NULL;
   for (int i = 0; i < arrlen(nexts); ++i) {

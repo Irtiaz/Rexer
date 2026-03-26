@@ -5,7 +5,7 @@
 
 int main(void) {
 	NFA *nfa1 = nfa_build_from_regex("a");
-	NFA *nfa2 = nfa_build_from_regex("b");
+	NFA *nfa2 = nfa_build_from_regex(NFA_ANY);
 	NFA *nfa3 = nfa_build_from_regex("c");
 
 	nfa_concat(nfa1, nfa2);
@@ -26,7 +26,10 @@ int main(void) {
 		"bc",
 		"abc",
 		"ababab",
-		"ababccccab"
+		"ababccccab",
+		"ababcccca",
+		"acacac",
+		"aca"
 	};
 
 	size_t num_testcases = sizeof(testcases) / sizeof(testcases[0]);
