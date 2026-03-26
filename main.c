@@ -4,50 +4,14 @@
 #include "NFA.h"
 
 int main(void) {
-	char regex[] = "((ab)|c)+d*";
-	print_tokens(regex);
-}
-
-int main3(void) {
-	NFA *nfa = nfa_build_from_regex("a|b|a.c");
-
+	NFA *nfa = nfa_from_regex("(ab|c)+");
 	nfa_print(nfa);
 
 	char testcases[][100] = {
 		"",
 		"a",
-		"b",
-		"c",
-		"a.c",
-		"abc",
-		"aac",
-		"abcab"
-	};
-
-	size_t num_testcases = sizeof(testcases) / sizeof(testcases[0]);
-	for (size_t i = 0; i < num_testcases; ++i) {
-		printf("Accepts \"%s\": %d\n", testcases[i], nfa_accepts(nfa, testcases[i]));
-	}
-
-	nfa_free(nfa, true);
-	return 0;
-}
-
-int main2(void) {
-	NFA *nfa1 = nfa_build_from_symbol("a");
-	NFA *nfa2 = nfa_build_from_symbol(NFA_ANY);
-	NFA *nfa3 = nfa_build_from_symbol("c");
-
-	nfa_concat(nfa1, nfa2);
-	nfa_union(nfa1, nfa3);
-	nfa_kleene_plus(nfa1);
-
-	nfa_print(nfa1);
-
-	char testcases[][100] = {
-		"",
-		"a",
 		"aaaa",
+		"bbbb",
 		"b",
 		"c",
 		"ccc",
@@ -55,6 +19,8 @@ int main2(void) {
 		"ac",
 		"bc",
 		"abc",
+		"a.c",
+		"acc",
 		"ababab",
 		"ababccccab",
 		"ababcccca",
@@ -64,11 +30,14 @@ int main2(void) {
 
 	size_t num_testcases = sizeof(testcases) / sizeof(testcases[0]);
 	for (size_t i = 0; i < num_testcases; ++i) {
-		printf("Accepts \"%s\": %d\n", testcases[i], nfa_accepts(nfa1, testcases[i]));
+		bool accepts = nfa_accepts(nfa, testcases[i]);
+		if (accepts) printf("\033[0;32m");
+		else printf("\033[0;31m");
+
+		printf("\"%s\"\n", testcases[i]);
+
+		printf("\033[0m");
 	}
 
-	nfa_free(nfa1, true);
-	nfa_free(nfa2, false);
-	nfa_free(nfa3, false);
-	return 0;
+	nfa_free(nfa, true);
 }
