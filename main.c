@@ -10,7 +10,7 @@ int main(void) {
 
 	nfa_concat(nfa1, nfa2);
 	nfa_union(nfa1, nfa3);
-	nfa_kleene_star(nfa1);
+	nfa_kleene_plus(nfa1);
 
 	nfa_print(nfa1);
 

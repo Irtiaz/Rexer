@@ -265,6 +265,12 @@ NFA *nfa_deep_copy(NFA *nfa) {
 	NFA *duplicate = calloc(1, sizeof(NFA));
 	duplicate->start_state = hmget(state_map, nfa->start_state);
 
+	for (int i = 0; i < hmlen(nfa->accepting_states); ++i) {
+		NFA_State *accepting_state = nfa->accepting_states[i].key;
+		NFA_State *dup_accept = hmget(state_map, accepting_state);
+		hmput(duplicate->accepting_states, dup_accept, true);
+	}
+
 	hmfree(state_map);
 	
 	return duplicate;
@@ -363,4 +369,6 @@ void nfa_kleene_plus(NFA *nfa) {
 	nfa_concat(nfa, duplicate);
 
 	nfa_free(duplicate, false);
+
+	nfa = duplicate;
 }
