@@ -21,7 +21,7 @@ typedef struct {
 
 NFA *nfa_from_regex(const char *regex);
 bool nfa_accepts(NFA *nfa, const char *string);
-void nfa_free(NFA *nfa, bool owned);
+void nfa_free(NFA *nfa);
 
 void nfa_print(NFA *nfa);
 

@@ -1,9 +1,23 @@
 #include <stdio.h>
 
 #define STB_DS_IMPLEMENTATION
-#include "NFA.h"
+#include "Rexer.h"
+
+void handler(Rexer_Location location, void *user_data) {
+	(void)user_data;
+	printf("line: %lu, column: %lu\n", location.line, location.column);
+}
 
 int main(void) {
+	Rexer rexer = {0};
+
+	rexer_register_rule(&rexer, ".*", handler, NULL);
+
+	rexer_free(&rexer);
+	return 0;
+}
+
+int main2(void) {
 	NFA *nfa = nfa_from_regex("a**");
 	nfa_print(nfa);
 
@@ -39,5 +53,7 @@ int main(void) {
 		printf("\033[0m");
 	}
 
-	nfa_free(nfa, true);
+	nfa_free(nfa);
+
+	return 0;
 }

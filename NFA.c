@@ -39,6 +39,8 @@ static NFA_State *nfa_state_init(void) {
   return state;
 }
 
+static void nfa_free_private(NFA *nfa, bool owned);
+
 static void nfa_add_transition(NFA_State *from, const char *symbol,
                                NFA_State *to) {
   NFA_State **to_list = shget(from->transition, symbol);
@@ -356,7 +358,7 @@ static NFA *parse_concat_expression(const char *regex, Regex_Token *tokens,
       nfa = next;
     else {
       nfa_concat(nfa, next);
-      nfa_free(next, false);
+      nfa_free_private(next, false);
     }
 
     i = next_i;
@@ -397,7 +399,7 @@ static NFA *parse_union_expression(const char *regex, Regex_Token *tokens,
 
       NFA *right = parse_union_expression(regex, tokens, i + 1, end);
       nfa_union(nfa, right);
-      nfa_free(right, false);
+      nfa_free_private(right, false);
 
       break;
     }
@@ -539,7 +541,7 @@ nfa_accepts_defer:
   return result;
 }
 
-void nfa_free(NFA *nfa, bool owned) {
+static void nfa_free_private(NFA *nfa, bool owned) {
   if (owned) {
     Traversal_Map *map = NULL;
     nfa_state_free(nfa->start_state, &map);
@@ -549,6 +551,10 @@ void nfa_free(NFA *nfa, bool owned) {
   hmfree(nfa->accepting_states);
 
   free(nfa);
+}
+
+void nfa_free(NFA *nfa) {
+	nfa_free_private(nfa, true);
 }
 
 static NFA *nfa_deep_copy(NFA *nfa) {
@@ -685,7 +691,7 @@ void nfa_kleene_plus(NFA *nfa) {
   nfa_kleene_star(duplicate);
   nfa_concat(nfa, duplicate);
 
-  nfa_free(duplicate, false);
+  nfa_free_private(duplicate, false);
 
   nfa = duplicate;
 }
