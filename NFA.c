@@ -483,11 +483,17 @@ static NFA_State **duplicate_list(NFA_State **list) {
   return result;
 }
 
+static bool not_newline(const char *symbol) {
+	if (symbol[0] == '\r') return false;
+	if (symbol[0] == '\n') return false;
+	return true;
+}
+
 static NFA_State **state_next_recursive(NFA_State *state, const char *symbol, Traversal_Map **p_map) {
 	hmput(*p_map, state, true);
 
   NFA_State **nexts = duplicate_list(shget(state->transition, symbol));
-  if (strcmp(symbol, NFA_EPSILON)) {
+  if (strcmp(symbol, NFA_EPSILON) && not_newline(symbol)) {
     merge_temp_list(&nexts, duplicate_list(shget(state->transition, NFA_ANY)));
   }
 

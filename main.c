@@ -33,9 +33,9 @@ void error_handler(const char *lexeme, Rexer_Location start, Rexer_Location end,
 int main(void) {
 	Rexer rexer = {0};
 
-	const char *source = "aaaccbb";
+	const char *source = "aaa\nccbb";
 
-	rexer_register_rule(&rexer, "a+c*?", a_handler, NULL);
+	rexer_register_rule(&rexer, "a+", a_handler, NULL);
 	rexer_register_rule(&rexer, "b*", b_handler, NULL);
 	rexer_register_error_handler(&rexer, error_handler, NULL);
 
