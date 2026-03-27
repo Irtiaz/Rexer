@@ -9,6 +9,9 @@ typedef enum {
 	TOK_OPTIONAL,
   TOK_LPAREN,
   TOK_RPAREN,
+	TOK_LSQUARE,
+	TOK_RSQUARE,
+	TOK_RANGE,
   TOK_ANY,
   TOK_UNION,
   TOK_CHAR,
@@ -196,12 +199,28 @@ static void match_parens(const char *regex, Regex_Token *tokens) {
 }
 
 static Regex_Token *tokenize(const char *regex) {
-  Regex_Token *tokens = NULL;
+	Regex_Token *tokens = NULL;
 
   size_t i = 0;
 
+	int last_lsquare_index = -1;
+
   while (regex[i] != '\0') {
     char c = regex[i];
+
+		if (last_lsquare_index >= 0 && c != ']' && c != '-') {
+			// We are in the [] block
+      arrput(tokens,
+             ((Regex_Token){.kind = TOK_CHAR, .location = i, .value = c}));
+			++i;
+			continue;
+		}
+
+		if (last_lsquare_index >= 0 && c == '-') {
+      arrput(tokens, ((Regex_Token){.kind = TOK_RANGE, .location = i}));
+			++i;
+			continue;
+		}
 
     if (c == '(') {
       arrput(tokens, ((Regex_Token){.kind = TOK_LPAREN, .location = i}));
@@ -210,6 +229,28 @@ static Regex_Token *tokenize(const char *regex) {
     else if (c == ')') {
       arrput(tokens, ((Regex_Token){.kind = TOK_RPAREN, .location = i}));
     }
+
+    else if (c == '[') {
+      arrput(tokens, ((Regex_Token){.kind = TOK_LSQUARE, .location = i}));
+
+			last_lsquare_index = arrlen(tokens) - 1;
+    }
+
+    else if (c == ']') {
+			if (last_lsquare_index < 0) {
+        fprintf(stderr, "Stray ']' encountered\n%s\n", regex);
+        fprintf(stderr, "%*s^~~~~~~\n", (int)i, " ");
+        exit(1);
+			}
+
+      arrput(tokens, ((Regex_Token){.kind = TOK_RSQUARE, .location = i}));
+			
+			tokens[last_lsquare_index].pair_index = arrlen(tokens) - 1;
+			arrlast(tokens).pair_index = last_lsquare_index;
+
+			last_lsquare_index = -1;
+    }
+
 
     else if (c == '+') {
       arrput(tokens, ((Regex_Token){.kind = TOK_PLUS, .location = i}));
@@ -255,6 +296,13 @@ static Regex_Token *tokenize(const char *regex) {
     ++i;
   }
 
+	if (last_lsquare_index >= 0) {
+		Regex_Token last_lsquare = tokens[last_lsquare_index];
+		fprintf(stderr, "Stray '[' encountered\n%s\n", regex);
+		fprintf(stderr, "%*s^~~~~~~\n", (int)last_lsquare.location, " ");
+		exit(1);
+	}
+
   match_parens(regex, tokens);
 
   return tokens;
@@ -284,6 +332,18 @@ void print_tokens(const char *regex) {
 
     case TOK_RPAREN: {
       printf("TOK_RPAREN, pair: %lu\n", token.pair_index);
+    } break;
+
+    case TOK_LSQUARE: {
+      printf("TOK_LSQUARE, pair: %lu\n", token.pair_index);
+    } break;
+
+    case TOK_RSQUARE: {
+      printf("TOK_RSQUARE, pair: %lu\n", token.pair_index);
+    } break;
+
+    case TOK_RANGE: {
+      puts("TOK_RANGE");
     } break;
 
     case TOK_ANY: {
@@ -339,6 +399,80 @@ static bool is_unary_token(Regex_Token token) {
 	return false;
 }
 
+
+// Parses from the `tokens` array from start (inclusive) to end (exclusive)
+static NFA *parse_range_expression(const char *regex, Regex_Token *tokens,
+																		size_t start, size_t end) {
+	(void)regex;
+
+	assert(end - start == 3);
+	assert(tokens[start].kind == TOK_CHAR);
+	assert(tokens[start + 1].kind == TOK_RANGE);
+	assert(tokens[start + 2].kind == TOK_CHAR);
+
+	char a = tokens[start].value;
+	char b = tokens[start + 2].value;
+
+	char min = a < b? a : b;
+	char max = a > b? a : b;
+
+	char symbol[2] = {0};
+	symbol[0] = min;
+
+	NFA *nfa = nfa_from_symbol(symbol);
+
+	for (char c = min + 1; c <= max; ++c) {
+		symbol[0] = c;
+
+		NFA *current = nfa_from_symbol(symbol);
+		nfa_union(nfa, current);
+		nfa_free_private(current, false);
+	}
+
+	return nfa;
+}
+
+
+// Parses from the `tokens` array from start (inclusive) to end (exclusive)
+static NFA *parse_set_expression(const char *regex, Regex_Token *tokens,
+																		size_t start, size_t end) {
+
+	NFA *nfa = NULL;
+
+	size_t i = start;
+	while (i < end) {
+		NFA *current_nfa;
+
+		if (i < end - 1 && tokens[i + 1].kind == TOK_RANGE) {
+			if (i + 1 == end - 1) {
+          fprintf(stderr, "Missing right operand for -\n%s\n", regex);
+          fprintf(stderr, "%*s^~~~~~~\n", (int)tokens[end].location, " ");
+          exit(1);
+			}
+
+			current_nfa = parse_range_expression(regex, tokens, i, i + 3);
+
+			i += 3;
+		}
+
+		else {
+			char symbol[2] = {0};
+			symbol[0] = tokens[i].value;
+			current_nfa = nfa_from_symbol(symbol);
+			++i;
+		}
+
+		if (nfa == NULL) nfa = current_nfa;
+		else {
+			nfa_union(nfa, current_nfa);
+			nfa_free_private(current_nfa, false);
+		}
+
+	}
+
+	return nfa;
+}
+
 // Parses from the `tokens` array from start (inclusive) to end (exclusive)
 static NFA *parse_concat_expression(const char *regex, Regex_Token *tokens,
 																		size_t start, size_t end) {
@@ -356,6 +490,12 @@ static NFA *parse_concat_expression(const char *regex, Regex_Token *tokens,
       next = parse_union_expression(regex, tokens, i + 1, pair);
       next_i = pair + 1;
     }
+
+		else if (token.kind == TOK_LSQUARE) {
+			size_t pair = token.pair_index;
+			next = parse_set_expression(regex, tokens, i + 1, pair);
+			next_i = pair + 1;
+		}
 
     else {
       next = parse_unary_expression(regex, tokens, i);

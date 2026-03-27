@@ -19,7 +19,7 @@ int main(void) {
   Rexer rexer = {.source = source};
 
   rexer_set_rule(&rexer, "a+", TOK_A);
-  rexer_set_rule(&rexer, "b*", TOK_B);
+  rexer_set_rule(&rexer, "[bc]+", TOK_B);
   rexer_set_error_handler(&rexer, error_handler, NULL);
 
   while (rexer_has_next(&rexer)) {
