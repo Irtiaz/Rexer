@@ -69,6 +69,19 @@ static void get_line_column(size_t *line_starts, size_t index, size_t *line, siz
 	*column = index - line_starts[*line];
 }
 
+// `start` is inclusive and `end` is exclusive
+static char *string_duplicate(const char *string, size_t start, size_t end) {
+	size_t length = end - start;
+	char *result = malloc(sizeof(char) * (length + 1));
+
+	for (size_t i = 0; i < length; ++i) {
+		result[i] = string[start + i];
+	}
+	result[length] = '\0';
+
+	return result;
+}
+
 void rexer_start(Rexer *rexer, const char *source) {
 	size_t length = strlen(source);
 	char *string = strdup(source);
@@ -96,17 +109,22 @@ void rexer_start(Rexer *rexer, const char *source) {
 		}
 		--end;
 
-		Rexer_Location start_location, end_location;
+		Rexer_Location start_location = {.index = start};
+		Rexer_Location end_location = {.index = end - 1};
 
 		get_line_column(line_starts, start, &start_location.line, &start_location.column);
-		get_line_column(line_starts, end - 1, &end_location.line, &end_location.column);
 
 
 		if (!previous_accepters) {
 			if (rexer->error_handler.handler) {
 				++end;
+
+				end_location.index = end - 1;
 				get_line_column(line_starts, end - 1, &end_location.line, &end_location.column);
-				rexer->error_handler.handler(start_location, end_location, rexer->error_handler.user_data);
+
+				char *lexeme = string_duplicate(source, start, end);
+				rexer->error_handler.handler(lexeme, start_location, end_location, rexer->error_handler.user_data);
+				free(lexeme);
 			}
 			else {
 				fprintf(stderr, "Lexical Error at line %lu, column %lu\n", start_location.line, start_location.column);
@@ -116,7 +134,11 @@ void rexer_start(Rexer *rexer, const char *source) {
 
 		else {
 			Rexer_Rule winner = previous_accepters[0];
-			winner.handler(start_location, end_location, winner.user_data);
+			get_line_column(line_starts, end - 1, &end_location.line, &end_location.column);
+
+			char *lexeme = string_duplicate(source, start, end);
+			winner.handler(lexeme, start_location, end_location, winner.user_data);
+			free(lexeme);
 		}
 
 		arrfree(previous_accepters);

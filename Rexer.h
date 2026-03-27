@@ -5,11 +5,12 @@
 #include "NFA.h"
 
 typedef struct {
+	size_t index;
 	size_t line;
 	size_t column;
 } Rexer_Location;
 
-typedef void (*Rexer_Handler)(Rexer_Location start, Rexer_Location end, void *user_data);
+typedef void (*Rexer_Handler)(const char *lexeme, Rexer_Location start, Rexer_Location end, void *user_data);
 
 typedef struct {
 	const char *regex;
