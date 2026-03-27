@@ -2,15 +2,6 @@
 #include <assert.h>
 #include <stdio.h>
 
-void rexer_set_rule_handler(Rexer *rexer, const char *regex, Rexer_Handler handler, void *user_data) {
-	arrput(rexer->rules, ((Rexer_Rule){
-				.regex = strdup(regex),
-				.handler = handler,
-				.nfa = nfa_from_regex(regex),
-				.user_data = user_data
-	}));
-}
-
 void rexer_set_rule(Rexer *rexer, const char *regex, int token) {
 	arrput(rexer->rules, ((Rexer_Rule){
 				.regex = strdup(regex),
@@ -189,22 +180,19 @@ Rexer_Rule rexer_next(Rexer *rexer, const char **lexeme,
 	return result;
 }
 
-void rexer_start(Rexer *rexer, const char *source) {
+/* void rexer_start(Rexer *rexer, const char *source) { */
 
-	rexer->source = source;
-	rexer->start = 0;
-	rexer->source_length = strlen(rexer->source);
+/* 	rexer->source = source; */
+/* 	rexer->start = 0; */
+/* 	rexer->source_length = strlen(rexer->source); */
 
-	while (rexer->start < rexer->source_length) {
-		char *lexeme;
-		Rexer_Location start_location, end_location;
+/* 	while (rexer->start < rexer->source_length) { */
+/* 		char *lexeme; */
+/* 		Rexer_Location start_location, end_location; */
 
-		Rexer_Rule rule = rexer_next(rexer, (const char **)&lexeme, &start_location, &end_location);
+/* 		Rexer_Rule rule = rexer_next(rexer, (const char **)&lexeme, &start_location, &end_location); */
 
-		if (rule.token != REXER_ERROR_TOKEN && rule.handler) {
-			rule.handler(lexeme, start_location, end_location, rule.user_data);
-		}
+/* 		free(lexeme); */
+/* 	} */
+/* } */
 
-		free(lexeme);
-	}
-}
