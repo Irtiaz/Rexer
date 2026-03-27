@@ -23,7 +23,7 @@ int main(void) {
   rexer_set_error_handler(&rexer, error_handler, NULL);
 
   while (rexer_has_next(&rexer)) {
-    const char *lexeme = NULL;
+    const char *lexeme;
     Rexer_Location start, end;
     Rexer_Rule rule = rexer_next(&rexer, &lexeme, &start, &end);
 
@@ -47,7 +47,7 @@ int main(void) {
 
     }
 
-		if (lexeme) free((void *)lexeme);
+		free((void *)lexeme);
   }
 
   rexer_free(&rexer);

@@ -159,12 +159,14 @@ Rexer_Rule rexer_next(Rexer *rexer, const char **lexeme,
       get_line_column(rexer->line_starts, end - 1, &end_location->line,
                       &end_location->column);
 
-      char *lexeme = string_duplicate(rexer->source, rexer->start, end);
-      rexer->error_handler.handler(lexeme, *start_location,
+      char *err_lexeme = string_duplicate(rexer->source, rexer->start, end);
+      rexer->error_handler.handler(err_lexeme, *start_location,
                                    rexer->error_handler.user_data);
 			result.token = REXER_ERROR_TOKEN;
 
-      free(lexeme);
+      free(err_lexeme);
+
+			*lexeme = NULL;
     } else {
       fprintf(stderr, "Lexical Error at line %lu, column %lu\n",
               start_location->line, start_location->column);
@@ -201,8 +203,8 @@ void rexer_start(Rexer *rexer, const char *source) {
 
 		if (rule.token != REXER_ERROR_TOKEN && rule.handler) {
 			rule.handler(lexeme, start_location, end_location, rule.user_data);
-			free(lexeme);
 		}
 
+		free(lexeme);
 	}
 }
