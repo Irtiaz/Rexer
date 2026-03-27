@@ -3,15 +3,37 @@
 #define STB_DS_IMPLEMENTATION
 #include "Rexer.h"
 
-void handler(Rexer_Location location, void *user_data) {
+void a_handler(Rexer_Location start, Rexer_Location end, void *user_data) {
 	(void)user_data;
-	printf("line: %lu, column: %lu\n", location.line, location.column);
+	puts("a handler");
+	printf("line: %lu, column: %lu\n", start.line, start.column);
+	printf("line: %lu, column: %lu\n", end.line, end.column);
+}
+
+void b_handler(Rexer_Location start, Rexer_Location end, void *user_data) {
+	(void)user_data;
+	puts("b handler");
+	printf("line: %lu, column: %lu\n", start.line, start.column);
+	printf("line: %lu, column: %lu\n", end.line, end.column);
+}
+
+void error_handler(Rexer_Location start, Rexer_Location end, void *user_data) {
+	(void)user_data;
+	puts("Error handler");
+	printf("line: %lu, column: %lu\n", start.line, start.column);
+	printf("line: %lu, column: %lu\n", end.line, end.column);
 }
 
 int main(void) {
 	Rexer rexer = {0};
 
-	rexer_register_rule(&rexer, ".*", handler, NULL);
+	const char *source = "aaa\naaa";
+
+	rexer_register_rule(&rexer, "a+", a_handler, NULL);
+	rexer_register_rule(&rexer, "aaa", b_handler, NULL);
+	rexer_register_error_handler(&rexer, error_handler, NULL);
+
+	rexer_start(&rexer, source);
 
 	rexer_free(&rexer);
 	return 0;
