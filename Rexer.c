@@ -98,11 +98,9 @@ bool rexer_has_next(Rexer *rexer) {
 	return rexer->start < rexer->source_length;
 }
 
-Rexer_Rule rexer_next(Rexer *rexer, const char **lexeme,
-									Rexer_Location *start_location,
-									Rexer_Location *end_location) {
+Rexer_Token rexer_next(Rexer *rexer) {
 
-	Rexer_Rule result = {0};
+	Rexer_Token result = {0};
 
 	if (rexer->source_length == 0) {
 		rexer->source_length = strlen(rexer->source);
@@ -136,41 +134,40 @@ Rexer_Rule rexer_next(Rexer *rexer, const char **lexeme,
   }
   --end;
 
-	start_location->index = rexer->start;
-	end_location->index = end - 1;
+	result.start.index = rexer->start;
+	result.end.index = end - 1;
 
-  get_line_column(rexer->line_starts, rexer->start, &start_location->line,
-                  &start_location->column);
+  get_line_column(rexer->line_starts, rexer->start, &result.start.line,
+                  &result.start.column);
 
   if (!previous_accepters) {
     if (rexer->error_handler.handler) {
       ++end;
 
-      end_location->index = end - 1;
-      get_line_column(rexer->line_starts, end - 1, &end_location->line,
-                      &end_location->column);
+      result.end.index = end - 1;
+      get_line_column(rexer->line_starts, end - 1, &result.end.line,
+                      &result.end.column);
 
       char *err_lexeme = string_duplicate(rexer->source, rexer->start, end);
-      rexer->error_handler.handler(err_lexeme, *start_location,
-                                   rexer->error_handler.user_data);
+			rexer->error_handler.handler(err_lexeme, result.start,
+																	 rexer->error_handler.user_data);
 			result.token = REXER_ERROR_TOKEN;
 
       free(err_lexeme);
-
-			*lexeme = NULL;
     } else {
       fprintf(stderr, "Lexical Error at line %lu, column %lu\n",
-              start_location->line, start_location->column);
+              result.start.line, result.start.column);
       exit(1);
     }
   }
 
   else {
-    result = previous_accepters[0];
-    get_line_column(rexer->line_starts, end - 1, &end_location->line,
-                    &end_location->column);
+		Rexer_Rule rule = previous_accepters[0];
+    get_line_column(rexer->line_starts, end - 1, &result.end.line,
+                    &result.end.column);
 
-    *lexeme = string_duplicate(rexer->source, rexer->start, end);
+		result.token = rule.token;
+		result.lexeme = string_duplicate(rexer->source, rexer->start, end);
   }
 
   arrfree(previous_accepters);
@@ -179,20 +176,3 @@ Rexer_Rule rexer_next(Rexer *rexer, const char **lexeme,
 
 	return result;
 }
-
-/* void rexer_start(Rexer *rexer, const char *source) { */
-
-/* 	rexer->source = source; */
-/* 	rexer->start = 0; */
-/* 	rexer->source_length = strlen(rexer->source); */
-
-/* 	while (rexer->start < rexer->source_length) { */
-/* 		char *lexeme; */
-/* 		Rexer_Location start_location, end_location; */
-
-/* 		Rexer_Rule rule = rexer_next(rexer, (const char **)&lexeme, &start_location, &end_location); */
-
-/* 		free(lexeme); */
-/* 	} */
-/* } */
-

@@ -19,9 +19,15 @@ typedef struct {
 	NFA *nfa;
 
 	int token;
-
-	void *user_data;
 } Rexer_Rule;
+
+typedef struct {
+	char *lexeme;
+	int token;
+
+	Rexer_Location start;
+	Rexer_Location end;
+} Rexer_Token;
 
 typedef struct {
 	Rexer_Error_Func handler;
@@ -47,7 +53,7 @@ void rexer_set_error_handler(Rexer *rexer, Rexer_Error_Func handler, void *user_
 void rexer_free(Rexer *rexer);
 
 bool rexer_has_next(Rexer *rexer);
-Rexer_Rule rexer_next(Rexer *rexer, const char **lexeme, Rexer_Location *start, Rexer_Location *end);
+Rexer_Token rexer_next(Rexer *rexer);
 
 void rexer_start(Rexer *rexer, const char *string);
 

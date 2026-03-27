@@ -23,31 +23,29 @@ int main(void) {
   rexer_set_error_handler(&rexer, error_handler, NULL);
 
   while (rexer_has_next(&rexer)) {
-    const char *lexeme;
-    Rexer_Location start, end;
-    Rexer_Rule rule = rexer_next(&rexer, &lexeme, &start, &end);
+    Rexer_Token token_info = rexer_next(&rexer);
 
-    switch (rule.token) {
+    switch (token_info.token) {
 
     case TOK_A: {
       puts("a handler");
-      puts(lexeme);
-      printf("index: %lu\n", start.index);
-      printf("line: %lu, column: %lu\n", start.line, start.column);
-      printf("line: %lu, column: %lu\n", end.line, end.column);
+      puts(token_info.lexeme);
+      printf("index: %lu\n", token_info.start.index);
+      printf("line: %lu, column: %lu\n", token_info.start.line, token_info.start.column);
+      printf("line: %lu, column: %lu\n", token_info.end.line, token_info.end.column);
     } break;
 
     case TOK_B: {
       puts("b handler");
-      puts(lexeme);
-      printf("index: %lu\n", start.index);
-      printf("line: %lu, column: %lu\n", start.line, start.column);
-      printf("line: %lu, column: %lu\n", end.line, end.column);
+      puts(token_info.lexeme);
+      printf("index: %lu\n", token_info.start.index);
+      printf("line: %lu, column: %lu\n", token_info.start.line, token_info.start.column);
+      printf("line: %lu, column: %lu\n", token_info.end.line, token_info.end.column);
     } break;
 
     }
 
-		free((void *)lexeme);
+		free(token_info.lexeme);
   }
 
   rexer_free(&rexer);
