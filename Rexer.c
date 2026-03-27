@@ -2,7 +2,7 @@
 #include <assert.h>
 #include <stdio.h>
 
-void rexer_register_rule(Rexer *rexer, const char *regex, Rexer_Handler handler, void *user_data) {
+void rexer_set_rule_handler(Rexer *rexer, const char *regex, Rexer_Handler handler, void *user_data) {
 	arrput(rexer->rules, ((Rexer_Rule){
 				.regex = strdup(regex),
 				.handler = handler,
@@ -11,8 +11,8 @@ void rexer_register_rule(Rexer *rexer, const char *regex, Rexer_Handler handler,
 	}));
 }
 
-void rexer_register_error_handler(Rexer *rexer, Rexer_Handler handler, void *user_data) {
-	rexer->error_handler = (Rexer_Rule){
+void rexer_set_error_handler(Rexer *rexer, Rexer_Error_Func handler, void *user_data) {
+	rexer->error_handler = (Rexer_Error_Handler){
 		.handler = handler,
 		.user_data = user_data
 	};
@@ -123,7 +123,7 @@ void rexer_start(Rexer *rexer, const char *source) {
 				get_line_column(line_starts, end - 1, &end_location.line, &end_location.column);
 
 				char *lexeme = string_duplicate(source, start, end);
-				rexer->error_handler.handler(lexeme, start_location, end_location, rexer->error_handler.user_data);
+				rexer->error_handler.handler(lexeme, start_location, rexer->error_handler.user_data);
 				free(lexeme);
 			}
 			else {
