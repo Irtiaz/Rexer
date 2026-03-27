@@ -99,6 +99,14 @@ static char *string_duplicate(const char *string, size_t start, size_t end) {
 	return result;
 }
 
+bool rexer_has_next(Rexer *rexer) {
+	if (rexer->source_length == 0) {
+		rexer->source_length = strlen(rexer->source);
+	}
+
+	return rexer->start < rexer->source_length;
+}
+
 Rexer_Rule rexer_next(Rexer *rexer, const char **lexeme,
 									Rexer_Location *start_location,
 									Rexer_Location *end_location) {
