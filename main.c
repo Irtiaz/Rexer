@@ -35,7 +35,7 @@ int main(void) {
 
 	const char *source = "aaaccbb";
 
-	rexer_register_rule(&rexer, "a+", a_handler, NULL);
+	rexer_register_rule(&rexer, "a+c*?", a_handler, NULL);
 	rexer_register_rule(&rexer, "b*", b_handler, NULL);
 	rexer_register_error_handler(&rexer, error_handler, NULL);
 

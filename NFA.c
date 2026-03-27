@@ -6,11 +6,12 @@
 typedef enum {
   TOK_STAR,
   TOK_PLUS,
+	TOK_OPTIONAL,
   TOK_LPAREN,
   TOK_RPAREN,
   TOK_ANY,
   TOK_UNION,
-  TOK_CHAR
+  TOK_CHAR,
 } Token_Kind;
 
 typedef struct {
@@ -218,6 +219,10 @@ static Regex_Token *tokenize(const char *regex) {
       arrput(tokens, ((Regex_Token){.kind = TOK_STAR, .location = i}));
     }
 
+    else if (c == '?') {
+      arrput(tokens, ((Regex_Token){.kind = TOK_OPTIONAL, .location = i}));
+    }
+
     else if (c == '.') {
       arrput(tokens, ((Regex_Token){.kind = TOK_ANY, .location = i}));
     }
@@ -267,6 +272,10 @@ void print_tokens(const char *regex) {
 
     case TOK_PLUS: {
       puts("TOK_PLUS");
+    } break;
+
+    case TOK_OPTIONAL: {
+      puts("TOK_OPTIONAL");
     } break;
 
     case TOK_LPAREN: {
@@ -323,6 +332,13 @@ static NFA *parse_unary_expression(const char *regex, Regex_Token *tokens,
   return nfa;
 }
 
+static bool is_unary_token(Regex_Token token) {
+	if (token.kind == TOK_STAR) return true;
+	if (token.kind == TOK_PLUS) return true;
+	if (token.kind == TOK_OPTIONAL) return true;
+	return false;
+}
+
 // Parses from the `tokens` array from start (inclusive) to end (exclusive)
 static NFA *parse_concat_expression(const char *regex, Regex_Token *tokens,
 																		size_t start, size_t end) {
@@ -345,12 +361,14 @@ static NFA *parse_concat_expression(const char *regex, Regex_Token *tokens,
       next = parse_unary_expression(regex, tokens, i);
     }
 
-    while (next_i < end && (tokens[next_i].kind == TOK_STAR ||
-														tokens[next_i].kind == TOK_PLUS)) {
+    while (next_i < end && is_unary_token(tokens[next_i])) {
       if (tokens[next_i].kind == TOK_STAR)
         nfa_kleene_star(next);
-      else
+      else if (tokens[next_i].kind == TOK_PLUS)
         nfa_kleene_plus(next);
+			else
+				nfa_optional(next);
+				
       ++next_i;
     }
 
@@ -653,6 +671,12 @@ void nfa_union(NFA *nfa1, NFA *nfa2) {
   nfa1->start_state = start_state;
 
   copy_accepting_states(nfa1, nfa2);
+}
+
+void nfa_optional(NFA *nfa) {
+	NFA *empty = nfa_from_symbol(NFA_EPSILON);
+	nfa_union(nfa, empty);
+	nfa_free_private(empty, false);
 }
 
 void nfa_kleene_star(NFA *nfa) {

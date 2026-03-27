@@ -27,6 +27,7 @@ void nfa_print(NFA *nfa);
 
 void nfa_concat(NFA *nfa1, NFA *nfa2); // Modifies nfa1
 void nfa_union(NFA *nfa1, NFA *nfa2); // Modifies nfa1
+void nfa_optional(NFA *nfa); // Modifies nfa
 void nfa_kleene_star(NFA *nfa); // Modifies nfa
 void nfa_kleene_plus(NFA *nfa); // Modifies nfa
 
