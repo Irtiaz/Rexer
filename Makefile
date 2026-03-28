@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-Wall -Wextra -Werror -pedantic -ggdb
+CFLAGS=-Wall -Wextra -Werror -pedantic -ggdb -Wswitch-enum
 SANITIZERS=-fsanitize=address,null,undefined,leak,alignment
 
 main: main.o NFA.o Rexer.o

@@ -44,7 +44,6 @@ typedef struct {
 	// Following fields will be set automatically when needed
 	size_t source_length;
 	size_t *line_starts;
-	char *source_dup;
 } Rexer;
 
 void rexer_set_rule(Rexer *rexer, const char *regex, int token);

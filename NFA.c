@@ -43,8 +43,6 @@ static NFA_State *nfa_state_init(void) {
   return state;
 }
 
-static void nfa_free_private(NFA *nfa, bool owned);
-
 static void nfa_add_transition(NFA_State *from, const char *symbol,
                                NFA_State *to) {
   NFA_State **to_list = shget(from->transition, symbol);
@@ -416,18 +414,20 @@ static NFA *parse_range_expression(const char *regex, Regex_Token *tokens,
 	char min = a < b? a : b;
 	char max = a > b? a : b;
 
+	NFA **nfas = NULL;
+
 	char symbol[2] = {0};
-	symbol[0] = min;
-
-	NFA *nfa = nfa_from_symbol(symbol);
-
-	for (char c = min + 1; c <= max; ++c) {
+	for (char c = min; c <= max; ++c) {
 		symbol[0] = c;
-
-		NFA *current = nfa_from_symbol(symbol);
-		nfa_union(nfa, current);
-		nfa_free_private(current, false);
+		NFA *c_nfa = nfa_from_symbol(symbol);
+		arrput(nfas, c_nfa);
 	}
+
+	NFA *nfa = nfa_union_all(nfas);
+	for (int i = 0; i < arrlen(nfas); ++i) {
+		nfa_free(nfas[i], false);
+	}
+	arrfree(nfas);
 
 	return nfa;
 }
@@ -465,7 +465,7 @@ static NFA *parse_set_expression(const char *regex, Regex_Token *tokens,
 		if (nfa == NULL) nfa = current_nfa;
 		else {
 			nfa_union(nfa, current_nfa);
-			nfa_free_private(current_nfa, false);
+			nfa_free(current_nfa, false);
 		}
 
 	}
@@ -516,7 +516,7 @@ static NFA *parse_concat_expression(const char *regex, Regex_Token *tokens,
       nfa = next;
     else {
       nfa_concat(nfa, next);
-      nfa_free_private(next, false);
+      nfa_free(next, false);
     }
 
     i = next_i;
@@ -557,7 +557,7 @@ static NFA *parse_union_expression(const char *regex, Regex_Token *tokens,
 
       NFA *right = parse_union_expression(regex, tokens, i + 1, end);
       nfa_union(nfa, right);
-      nfa_free_private(right, false);
+      nfa_free(right, false);
 
       break;
     }
@@ -668,57 +668,55 @@ static NFA_State **state_list_next(NFA_State **state_list, const char *symbol) {
   return result;
 }
 
+static bool nfa_is_accepting(NFA *nfa) {
+	for (int i = 0; i < arrlen(nfa->current_states); ++i) {
+		if (hmget(nfa->accepting_states, nfa->current_states[i])) return true;
+	}
+	return false;
+}
+
+bool nfa_forward(NFA *nfa, char c) {
+	char symbol[2] = {0};
+	symbol[0] = c;
+
+  NFA_State **next_states = state_list_next(nfa->current_states, symbol);
+  arrfree(nfa->current_states);
+  nfa->current_states = next_states;
+
+  return nfa_is_accepting(nfa);
+}
+
 bool nfa_accepts(NFA *nfa, const char *string) {
-  NFA_State **current_states = NULL;
-  arrput(current_states, nfa->start_state);
+	nfa_rewind(nfa);
 
-  NFA_State **other_start_states = state_next(nfa->start_state, NFA_EPSILON);
-  merge_temp_list(&current_states, other_start_states);
-
-  while (*string != '\0' && arrlen(current_states) != 0) {
-    char symbol[2] = {0};
-    symbol[0] = *string;
-
-    NFA_State **next_states = state_list_next(current_states, symbol);
-    arrfree(current_states);
-    current_states = next_states;
+  while (*string != '\0' && arrlen(nfa->current_states) != 0) {
+		nfa_forward(nfa, *string);
 
     ++string;
   }
 
-  bool result = false;
-
-  if (current_states == NULL) {
-    result = false;
-    goto nfa_accepts_defer;
-  }
-
-  for (int i = 0; i < arrlen(current_states); ++i) {
-    if (hmget(nfa->accepting_states, current_states[i])) {
-      result = true;
-      goto nfa_accepts_defer;
-    }
-  }
-
-nfa_accepts_defer:
-  arrfree(current_states);
-  return result;
+	return nfa_is_accepting(nfa);
 }
 
-static void nfa_free_private(NFA *nfa, bool owned) {
-  if (owned) {
+void nfa_free(NFA *nfa, bool owner) {
+  if (owner) {
     Traversal_Map *map = NULL;
     nfa_state_free(nfa->start_state, &map);
     hmfree(map);
   }
 
+	arrfree(nfa->current_states);
   hmfree(nfa->accepting_states);
 
   free(nfa);
 }
 
-void nfa_free(NFA *nfa) {
-	nfa_free_private(nfa, true);
+void nfa_rewind(NFA *nfa) {
+	arrfree(nfa->current_states);
+  arrput(nfa->current_states, nfa->start_state);
+
+  NFA_State **other_start_states = state_next(nfa->start_state, NFA_EPSILON);
+  merge_temp_list(&nfa->current_states, other_start_states);
 }
 
 static NFA *nfa_deep_copy(NFA *nfa) {
@@ -819,10 +817,23 @@ void nfa_union(NFA *nfa1, NFA *nfa2) {
   copy_accepting_states(nfa1, nfa2);
 }
 
+NFA *nfa_union_all(NFA **nfas) {
+  NFA *nfa = calloc(1, sizeof(NFA));
+
+	nfa->start_state = nfa_state_init();
+
+	for (int i = 0; i < arrlen(nfas); ++i) {
+		nfa_add_transition(nfa->start_state, NFA_EPSILON, nfas[i]->start_state);
+		copy_accepting_states(nfa, nfas[i]);
+	}
+
+	return nfa;
+}
+
 void nfa_optional(NFA *nfa) {
 	NFA *empty = nfa_from_symbol(NFA_EPSILON);
 	nfa_union(nfa, empty);
-	nfa_free_private(empty, false);
+	nfa_free(empty, false);
 }
 
 void nfa_kleene_star(NFA *nfa) {
@@ -861,7 +872,7 @@ void nfa_kleene_plus(NFA *nfa) {
   nfa_kleene_star(duplicate);
   nfa_concat(nfa, duplicate);
 
-  nfa_free_private(duplicate, false);
+  nfa_free(duplicate, false);
 
   nfa = duplicate;
 }

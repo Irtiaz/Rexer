@@ -21,7 +21,7 @@ void rexer_free(Rexer *rexer) {
 	for (int i = 0; i < arrlen(rexer->rules); ++i) {
 		Rexer_Rule rule = rexer->rules[i];
 		free((void *)rule.regex);
-		nfa_free(rule.nfa);
+		nfa_free(rule.nfa, true);
 	}
 
 	arrfree(rexer->rules);
@@ -30,18 +30,15 @@ void rexer_free(Rexer *rexer) {
 		arrfree(rexer->line_starts);
 	}
 
-	if (rexer->source_dup != NULL) {
-		free(rexer->source_dup);
-	}
-
 }
 
-static Rexer_Rule *accepter(Rexer *rexer, const char *string) {
+
+static Rexer_Rule *accepter(Rexer *rexer, char c) {
 	Rexer_Rule *result = NULL;
 
 	for (int i = 0; i < arrlen(rexer->rules); ++i) {
 		Rexer_Rule rule = rexer->rules[i];
-		if (nfa_accepts(rule.nfa, string)) {
+		if (nfa_forward(rule.nfa, c)) {
 			arrput(result, rule);
 		}
 	}
@@ -70,11 +67,15 @@ static size_t *get_line_starts(const char *string) {
 	return starts;
 }
 
-static void get_line_column(size_t *line_starts, size_t index, size_t *line, size_t *column) {
+static void get_line_column(const char *string, size_t *line_starts, size_t index, size_t *line, size_t *column) {
 	*line = 0;
 	while (index > line_starts[*line] && *line != (size_t)arrlen(line_starts) - 1 && index >= line_starts[*line + 1]) ++(*line);
 
-	*column = index - line_starts[*line];
+	*column = 0;
+	for (size_t i = line_starts[*line]; i < index; ++i) {
+		if (string[i] != '\t') (*column)++;
+		else (*column) += 8;
+	}
 }
 
 // `start` is inclusive and `end` is exclusive
@@ -110,21 +111,19 @@ Rexer_Token rexer_next(Rexer *rexer) {
 		rexer->line_starts = get_line_starts(rexer->source);
 	}
 
-	if (rexer->source_dup == NULL) {
-		rexer->source_dup = strdup(rexer->source);
+	for (int i = 0; i < arrlen(rexer->rules); ++i) {
+		nfa_rewind(rexer->rules[i].nfa);
 	}
 
 	size_t end = rexer->start + 1;
   Rexer_Rule *previous_accepters = NULL;
 
   while (end <= rexer->source_length) {
-    char c = rexer->source_dup[end];
-    rexer->source_dup[end] = '\0';
+		char c = rexer->source[end - 1];
 
-    Rexer_Rule *current_accepters = accepter(rexer, rexer->source_dup + rexer->start);
-    rexer->source_dup[end] = c;
+    Rexer_Rule *current_accepters = accepter(rexer, c);
 
-    if (arrlen(current_accepters) == 0)
+    if (previous_accepters && arrlen(current_accepters) == 0)
       break;
 
     arrfree(previous_accepters);
@@ -137,15 +136,15 @@ Rexer_Token rexer_next(Rexer *rexer) {
 	result.start.index = rexer->start;
 	result.end.index = end - 1;
 
-  get_line_column(rexer->line_starts, rexer->start, &result.start.line,
+  get_line_column(rexer->source, rexer->line_starts, rexer->start, &result.start.line,
                   &result.start.column);
 
   if (!previous_accepters) {
     if (rexer->error_handler.handler) {
-      ++end;
+			end = rexer->start + 1;
 
       result.end.index = end - 1;
-      get_line_column(rexer->line_starts, end - 1, &result.end.line,
+      get_line_column(rexer->source, rexer->line_starts, end - 1, &result.end.line,
                       &result.end.column);
 
       char *err_lexeme = string_duplicate(rexer->source, rexer->start, end);
@@ -163,7 +162,7 @@ Rexer_Token rexer_next(Rexer *rexer) {
 
   else {
 		Rexer_Rule rule = previous_accepters[0];
-    get_line_column(rexer->line_starts, end - 1, &result.end.line,
+    get_line_column(rexer->source, rexer->line_starts, end - 1, &result.end.line,
                     &result.end.column);
 
 		result.token = rule.token;
