@@ -27,6 +27,7 @@ bool nfa_accepts(NFA *nfa, const char *string);
 void nfa_free(NFA *nfa, bool owner);
 void nfa_rewind(NFA *nfa);
 bool nfa_forward(NFA *nfa, char c);
+bool nfa_is_alive(NFA *nfa);
 
 void nfa_print(NFA *nfa);
 

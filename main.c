@@ -71,7 +71,7 @@ int main(void) {
 	rexer_set_rule(&rexer, "case", CASE);
 	rexer_set_rule(&rexer, "break", BREAK);
 	rexer_set_rule(&rexer, "return", RETURN);
-	rexer_set_rule(&rexer, "\x22.*\x22", STRING);
+	rexer_set_rule(&rexer, "\".*\"", STRING);
 	rexer_set_rule(&rexer, "\\.", DOT);
 	rexer_set_rule(&rexer, "\\+", PLUS);
 	rexer_set_rule(&rexer, "=", ASSIGN);

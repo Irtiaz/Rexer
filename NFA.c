@@ -686,6 +686,10 @@ bool nfa_forward(NFA *nfa, char c) {
   return nfa_is_accepting(nfa);
 }
 
+bool nfa_is_alive(NFA *nfa) {
+	return arrlen(nfa->current_states);
+}
+
 bool nfa_accepts(NFA *nfa, const char *string) {
 	nfa_rewind(nfa);
 

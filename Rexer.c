@@ -32,15 +32,16 @@ void rexer_free(Rexer *rexer) {
 
 }
 
-
-static Rexer_Rule *accepter(Rexer *rexer, char c) {
+static Rexer_Rule *get_next_alives(Rexer_Rule *previous_alives, char c) {
 	Rexer_Rule *result = NULL;
 
-	for (int i = 0; i < arrlen(rexer->rules); ++i) {
-		Rexer_Rule rule = rexer->rules[i];
-		if (nfa_forward(rule.nfa, c)) {
-			arrput(result, rule);
-		}
+	for (int i = 0; i < arrlen(previous_alives); ++i) {
+		Rexer_Rule rule = previous_alives[i];
+
+		if (!nfa_is_alive(rule.nfa)) continue;
+		nfa_forward(rule.nfa, c);
+
+		if (nfa_is_alive(rule.nfa)) arrput(result, rule);
 	}
 
 	return result;
@@ -99,6 +100,14 @@ bool rexer_has_next(Rexer *rexer) {
 	return rexer->start < rexer->source_length;
 }
 
+Rexer_Rule *dup_rules(Rexer_Rule *rules) {
+	Rexer_Rule *result = NULL;
+	for (int i = 0; i < arrlen(rules); ++i) {
+		arrput(result, rules[i]);
+	}
+	return result;
+}
+
 Rexer_Token rexer_next(Rexer *rexer) {
 
 	Rexer_Token result = {0};
@@ -116,18 +125,19 @@ Rexer_Token rexer_next(Rexer *rexer) {
 	}
 
 	size_t end = rexer->start + 1;
-  Rexer_Rule *previous_accepters = NULL;
+  Rexer_Rule *previous_alives = dup_rules(rexer->rules);
 
   while (end <= rexer->source_length) {
 		char c = rexer->source[end - 1];
 
-    Rexer_Rule *current_accepters = accepter(rexer, c);
+    Rexer_Rule *current_alives = get_next_alives(previous_alives, c);
+		if (arrlen(current_alives) == 0) break;
 
-    if (previous_accepters && arrlen(current_accepters) == 0)
-      break;
+    /* if (previous_accepters && arrlen(current_accepters) == 0) */
+    /*   break; */
 
-    arrfree(previous_accepters);
-    previous_accepters = current_accepters;
+    arrfree(previous_alives);
+    previous_alives = current_alives;
 
     ++end;
   }
@@ -139,7 +149,7 @@ Rexer_Token rexer_next(Rexer *rexer) {
   get_line_column(rexer->source, rexer->line_starts, rexer->start, &result.start.line,
                   &result.start.column);
 
-  if (!previous_accepters) {
+  if (!previous_alives) {
     if (rexer->error_handler.handler) {
 			end = rexer->start + 1;
 
@@ -161,7 +171,7 @@ Rexer_Token rexer_next(Rexer *rexer) {
   }
 
   else {
-		Rexer_Rule rule = previous_accepters[0];
+		Rexer_Rule rule = previous_alives[0];
     get_line_column(rexer->source, rexer->line_starts, end - 1, &result.end.line,
                     &result.end.column);
 
@@ -169,7 +179,7 @@ Rexer_Token rexer_next(Rexer *rexer) {
 		result.lexeme = string_duplicate(rexer->source, rexer->start, end);
   }
 
-  arrfree(previous_accepters);
+  arrfree(previous_alives);
 
   rexer->start = end;
 
